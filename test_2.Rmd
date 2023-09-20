@@ -1,0 +1,125 @@
+---
+title: "test_2"
+output: html_document
+date: "2023-09-20"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Loading the required packages
+
+```{r}
+packages = c('tidyverse','ggdist','gghalves','ggthemes','hrbrthemes','ggridges','patchwork','zoo', 'ggrepel','ggiraph','lubridate','gganimate','scales', 'plotly','treemap', 'sf', 'rnaturalearth', 'rnaturalearthdata', 'leaflet', 'trelliscopejs')
+for(p in packages){
+  if(!require(p, character.only = T)){
+    install.packages(p)
+  }
+  library(p, character.only = T)
+}
+
+```
+
+### Loading the Dataset
+
+
+```{r}
+malaria_deaths <- read_csv("https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2018/2018-11-13/malaria_deaths.csv")
+malaria_deaths_age <- read_csv("https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2018/2018-11-13/malaria_deaths_age.csv")
+malaria_inc <- read_csv("https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2018/2018-11-13/malaria_inc.csv")
+summary(malaria_deaths)
+summary(malaria_deaths_age)
+summary(malaria_inc)
+
+```
+
+### Loading a world map, creating world map data with malaria deaths table
+
+
+```{r}
+world_map <- ne_countries(scale = "medium", returnclass = "sf")
+
+world_map_data_with_malaria_deaths <- merge(world_map, malaria_deaths, by.x = "name", by.y = "Entity", all.x = TRUE)
+```
+
+### Visualizing the current (i.e. 2016) deaths caused by Malaria on a country level basis
+
+
+```{r}
+
+world_map_data_with_malaria_deaths_2016 <- world_map_data_with_malaria_deaths %>%
+  filter(Year == 2016) %>%
+  filter(!is.null(Code)) %>%
+  select(name, `Deaths - Malaria - Sex: Both - Age: Age-standardized (Rate) (per 100,000 people)`, Year)
+map <- leaflet(world_map_data_with_malaria_deaths_2016) %>%
+  addTiles() %>%
+  addPolygons(
+    fillColor = ~colorFactor("Reds", `Deaths - Malaria - Sex: Both - Age: Age-standardized (Rate) (per 100,000 people)`)(`Deaths - Malaria - Sex: Both - Age: Age-standardized (Rate) (per 100,000 people)`),
+    fillOpacity = 0.7,
+    color = "white",
+    weight = 1,
+    popup = ~paste(name, "<br>deaths by malaria per 100,000 people in 2016: ",`Deaths - Malaria - Sex: Both - Age: Age-standardized (Rate) (per 100,000 people)` )
+  ) %>%
+  setView(lng = 0, lat = 0, zoom = 2)  
+
+map
+```
+
+### Create a plotly plot to visualize deaths caused by malaria over the years
+```{r}
+
+ggplot_data <- world_map_data_with_malaria_deaths %>%
+  filter(!is.null(Code)) %>%
+  ggplot(aes(x = Year, y = `Deaths - Malaria - Sex: Both - Age: Age-standardized (Rate) (per 100,000 people)`, color = name)) +
+  
+  # Add a line plot
+  geom_line() +
+  
+  # Customize the plot
+  labs(
+    title = "Deaths caused by Malaria per 100,000 people by Country over the years",
+    x = "Date",
+    y = "Cases",
+    color = "Country"
+  ) +
+  
+  # Facet the plot by Region
+  facet_wrap(~region_wb, ncol = 2) +
+  
+  # Improve the aesthetics
+  theme_minimal() +
+  
+  # Rotate x-axis labels for better readability
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) 
+
+# Convert the ggplot object to a plotly object
+plotly_data <- ggplotly(ggplot_data)
+
+# Display the interactive plot
+plotly_data
+```
+
+
+### Create a plot using trelliscopejs to visualize deaths caused by malaria by age group and country over the years
+```{r}
+
+ggplot_data2 <- malaria_deaths_age %>%
+  filter(code != 'NA') %>%
+  filter(entity != "World") %>%
+  filter(deaths != 0) %>%
+  ggplot(aes(x = year, y = deaths, fill = age_group)) + 
+  geom_bar(position = "stack", stat="identity") +
+  labs(x = 'Year', y= 'Deaths caused by Malaria', title = 'Yearly deaths caused by Malaria by age group') +
+  facet_trelliscope(~entity,
+                    nrow = 2,
+                    ncol = 2,
+                    width = 800,
+                    self_contained=TRUE) 
+
+ggplot_data2
+  
+ 
+```
+
+
